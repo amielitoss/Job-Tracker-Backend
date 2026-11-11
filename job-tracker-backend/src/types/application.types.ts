@@ -9,7 +9,7 @@ export type ApplicationStatus =
 typeof applicationStatuses[number];
 
 export type ApplicationType = {
-    id: number;
+    id: string;
     company: string;
     role: string;
     status: ApplicationStatus;
