@@ -5,12 +5,13 @@ import {
     createApplication,
     updateApplication,
     deleteApplication
-}  from "../controllers/applications.controller.js"
+}  from "../controllers/applications.controller.js";
+import { authenticateUser } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.route('/').get(getApplications).post(createApplication)
+router.route('/').get(authenticateUser, getApplications).post(authenticateUser, createApplication)
 
-router.route('/:id').get(getApplicationById).patch(updateApplication).delete(deleteApplication)
+router.route('/:id').get(authenticateUser, getApplicationById).patch(authenticateUser, updateApplication).delete(authenticateUser, deleteApplication)
 
 export default router;

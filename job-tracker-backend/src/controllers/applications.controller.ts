@@ -4,13 +4,15 @@ import {
   type ApplicationStatus,
   type ApplicationType,
 } from "../types/application.types.js";
+import type { AuthenticatedRequest } from "../types/auth.types.js";
 import pool from "../config/db.js";
 
 type CreateApplicationBody = Omit<ApplicationType, "id">;
 
-const getApplications = async (req: Request, res: Response) => {
+const getApplications = async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.userId;
   try {
-    const result = await pool.query("SELECT * FROM applications;");
+    const result = await pool.query("SELECT * FROM applications WHERE user_id = $1;", [userId]);
     res.json(result.rows);
   } catch (error) {
     console.error(error);
@@ -35,10 +37,11 @@ const isValidUUID = (id: string) => {
 };
 
 const getApplicationById = async (
-  req: Request<{ id: string }>,
+  req: AuthenticatedRequest<{ id: string }>,
   res: Response,
 ) => {
   const { id } = req.params;
+  const userId = req.userId;
 
   try {
     if (!isValidUUID(id)) {
@@ -48,8 +51,8 @@ const getApplicationById = async (
       });
     }
     const result = await pool.query(
-      "SELECT * FROM applications WHERE id = $1",
-      [id],
+      "SELECT * FROM applications WHERE id = $1 AND user_id = $2",
+      [id, userId],
     );
 
     if (result.rows.length === 0) {
@@ -67,8 +70,10 @@ const getApplicationById = async (
   }
 };
 
-const createApplication = async (req: Request, res: Response) => {
+const createApplication = async (req: AuthenticatedRequest, res: Response) => {
   const { company, role, status }: CreateApplicationBody = req.body;
+  const userId = req.userId;
+
   if (!company || !company.trim() || !role || !role.trim() || !status) {
     return res.status(400).json({
       status: "FAILED",
@@ -85,8 +90,8 @@ const createApplication = async (req: Request, res: Response) => {
 
   try {
     const result = await pool.query(
-      "INSERT INTO applications (company, role, status) VALUES ($1, $2, $3) RETURNING *;",
-      [company.trim(), role.trim(), status],
+      "INSERT INTO applications (company, role, status, user_id) VALUES ($1, $2, $3, $4) RETURNING *;",
+      [company.trim(), role.trim(), status, userId],
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -97,9 +102,10 @@ const createApplication = async (req: Request, res: Response) => {
   }
 };
 
-const updateApplication = async (req: Request<{id: string}>, res: Response) => {
+const updateApplication = async (req: AuthenticatedRequest<{id: string}>, res: Response) => {
   const { id } = req.params;
   const { company, role, status }: Partial<CreateApplicationBody> = req.body;
+  const userId = req.userId;
 
   if (!isValidUUID(id)) {
     return res.status(400).json({
@@ -135,12 +141,13 @@ const updateApplication = async (req: Request<{id: string}>, res: Response) => {
 
   try {
     const result = await pool.query(
-      "UPDATE applications SET company = COALESCE($1, company), role = COALESCE($2, role), status = COALESCE($3, status) WHERE id = $4 RETURNING *;",
+      "UPDATE applications SET company = COALESCE($1, company), role = COALESCE($2, role), status = COALESCE($3, status) WHERE id = $4  AND user_id = $5 RETURNING *;",
       [
         company ? company.trim() : null,
         role ? role.trim() : null,
         status ?? null,
         id,
+        userId,
       ],
     );
 
@@ -160,8 +167,9 @@ const updateApplication = async (req: Request<{id: string}>, res: Response) => {
   }
 };
 
-const deleteApplication = async (req: Request<{id: string}>, res: Response) => {
+const deleteApplication = async (req: AuthenticatedRequest<{id: string}>, res: Response) => {
   const { id } = req.params;
+  const userId = req.userId;
 
   if (!isValidUUID(id)) {
     return res.status(400).json({
@@ -171,7 +179,7 @@ const deleteApplication = async (req: Request<{id: string}>, res: Response) => {
   }
   
   try { 
-    const result = await pool.query("DELETE FROM applications WHERE id = $1 RETURNING *;", [id])
+    const result = await pool.query("DELETE FROM applications WHERE id = $1 and user_id = $2 RETURNING *;", [id, userId])
 
     if(result.rows.length === 0){
        return res.status(404).json({
