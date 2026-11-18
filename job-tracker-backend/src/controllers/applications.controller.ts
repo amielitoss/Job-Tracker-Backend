@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { Response } from "express";
 import {
   applicationStatuses,
   type ApplicationStatus,
@@ -12,7 +12,10 @@ type CreateApplicationBody = Omit<ApplicationType, "id">;
 const getApplications = async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.userId;
   try {
-    const result = await pool.query("SELECT * FROM applications WHERE user_id = $1;", [userId]);
+    const result = await pool.query(
+      "SELECT * FROM applications WHERE user_id = $1;",
+      [userId],
+    );
     res.json(result.rows);
   } catch (error) {
     console.error(error);
@@ -71,10 +74,17 @@ const getApplicationById = async (
 };
 
 const createApplication = async (req: AuthenticatedRequest, res: Response) => {
-  const { company, role, status }: CreateApplicationBody = req.body;
+  const {
+    company,
+    role,
+    status,
+    date,
+    location,
+    notes,
+  }: CreateApplicationBody = req.body;
   const userId = req.userId;
 
-  if (!company || !company.trim() || !role || !role.trim() || !status) {
+  if (!company || !company.trim() || !role || !role.trim() || !status || !date || !location || !location.trim()) {
     return res.status(400).json({
       status: "FAILED",
       message: "Please provide the important details",
@@ -90,8 +100,8 @@ const createApplication = async (req: AuthenticatedRequest, res: Response) => {
 
   try {
     const result = await pool.query(
-      "INSERT INTO applications (company, role, status, user_id) VALUES ($1, $2, $3, $4) RETURNING *;",
-      [company.trim(), role.trim(), status, userId],
+      "INSERT INTO applications (company, role, status, date, location, notes, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;",
+      [company.trim(), role.trim(), status, date, location, notes, userId],
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -102,9 +112,19 @@ const createApplication = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-const updateApplication = async (req: AuthenticatedRequest<{id: string}>, res: Response) => {
+const updateApplication = async (
+  req: AuthenticatedRequest<{ id: string }>,
+  res: Response,
+) => {
   const { id } = req.params;
-  const { company, role, status }: Partial<CreateApplicationBody> = req.body;
+  const {
+    company,
+    role,
+    status,
+    date,
+    location,
+    notes,
+  }: Partial<CreateApplicationBody> = req.body;
   const userId = req.userId;
 
   if (!isValidUUID(id)) {
@@ -141,33 +161,39 @@ const updateApplication = async (req: AuthenticatedRequest<{id: string}>, res: R
 
   try {
     const result = await pool.query(
-      "UPDATE applications SET company = COALESCE($1, company), role = COALESCE($2, role), status = COALESCE($3, status) WHERE id = $4  AND user_id = $5 RETURNING *;",
+      "UPDATE applications SET company = COALESCE($1, company), role = COALESCE($2, role), status = COALESCE($3, status), date = COALESCE($4, date), location = COALESCE($5, location), notes = COALESCE($6, notes) WHERE id = $7 AND user_id = $8 RETURNING *;",
       [
         company ? company.trim() : null,
         role ? role.trim() : null,
         status ?? null,
+        date ?? null,
+        location ?? null,
+        notes ?? null,
         id,
         userId,
       ],
     );
 
-    if(result.rows.length === 0) {
-       return res.status(404).json({
-      status: "FAILED",
-      message: `No application with the id ${id}`,
-    });
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        status: "FAILED",
+        message: `No application with the id ${id}`,
+      });
     }
-    res.status(200).json(result.rows[0])
+    res.status(200).json(result.rows[0]);
   } catch (error) {
     console.error(error);
     res.status(500).json({
       status: "FAILED",
       message: "Unable to update application",
-    })
+    });
   }
 };
 
-const deleteApplication = async (req: AuthenticatedRequest<{id: string}>, res: Response) => {
+const deleteApplication = async (
+  req: AuthenticatedRequest<{ id: string }>,
+  res: Response,
+) => {
   const { id } = req.params;
   const userId = req.userId;
 
@@ -177,24 +203,26 @@ const deleteApplication = async (req: AuthenticatedRequest<{id: string}>, res: R
       message: "Invalid application id",
     });
   }
-  
-  try { 
-    const result = await pool.query("DELETE FROM applications WHERE id = $1 and user_id = $2 RETURNING *;", [id, userId])
 
-    if(result.rows.length === 0){
-       return res.status(404).json({
-      status: "FAILED",
-      message: `No application with the id ${id}`,
-    });
+  try {
+    const result = await pool.query(
+      "DELETE FROM applications WHERE id = $1 and user_id = $2 RETURNING *;",
+      [id, userId],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        status: "FAILED",
+        message: `No application with the id ${id}`,
+      });
     }
-    res.status(200).json(result.rows[0])
-  } catch(error){
+    res.status(200).json(result.rows[0]);
+  } catch (error) {
     console.error(error);
-     res.status(500).json({
+    res.status(500).json({
       status: "FAILED",
       message: "Unable to delete application",
-    })
-
+    });
   }
 };
 
