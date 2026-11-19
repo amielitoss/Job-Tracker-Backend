@@ -15,5 +15,5 @@ export type ApplicationType = {
   status: ApplicationStatus;
   date: string;
   location: string;
-  notes: string;
+  notes?: string;
 };

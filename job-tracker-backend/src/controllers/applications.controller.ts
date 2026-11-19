@@ -84,7 +84,16 @@ const createApplication = async (req: AuthenticatedRequest, res: Response) => {
   }: CreateApplicationBody = req.body;
   const userId = req.userId;
 
-  if (!company || !company.trim() || !role || !role.trim() || !status || !date || !location || !location.trim()) {
+  if (
+    !company ||
+    !company.trim() ||
+    !role ||
+    !role.trim() ||
+    !status ||
+    !date ||
+    !location ||
+    !location.trim()
+  ) {
     return res.status(400).json({
       status: "FAILED",
       message: "Please provide the important details",
@@ -101,7 +110,15 @@ const createApplication = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const result = await pool.query(
       "INSERT INTO applications (company, role, status, date, location, notes, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;",
-      [company.trim(), role.trim(), status, date, location, notes, userId],
+      [
+        company.trim(),
+        role.trim(),
+        status,
+        date,
+        location,
+        notes ?? null,
+        userId,
+      ],
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
