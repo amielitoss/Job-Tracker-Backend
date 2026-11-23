@@ -5,7 +5,10 @@ import type { DatabaseError } from "pg";
 import jwt from "jsonwebtoken";
 import type { AuthenticatedRequest } from "../types/auth.types.js";
 import { randomInt } from "node:crypto";
-import { sendVerificationEmail } from "../services/mailService.js";
+import {
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+} from "../services/mailService.js";
 
 const isValidEmail = (email: string) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -273,4 +276,146 @@ const getCurrentUser = async (req: AuthenticatedRequest, res: Response) => {
 };
 // GET THE CURRENT USER or (/me)
 
-export { registerUser, verifyEmail, loginUser, logoutUser, getCurrentUser };
+// FORGOT PASSWORD
+const forgotPassword = async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({
+      status: "FAILED",
+      message: "Email is required",
+    });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  try {
+    const result = await pool.query(
+      "SELECT user_uid, email FROM users WHERE email = $1",
+      [normalizedEmail],
+    );
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(200).json({
+        status: "OK",
+        message:
+          "If an account exists for this email, a reset code has been sent.",
+      });
+    }
+
+    const resetCode = randomInt(100000, 1000000).toString();
+    const resetCodeHash = await bcrypt.hash(resetCode, 10);
+    const resetCodeExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await pool.query(
+      "UPDATE users SET password_reset_code = $1,password_reset_code_expires_at = $2 WHERE user_uid = $3",
+      [resetCodeHash, resetCodeExpiresAt, user.user_uid],
+    );
+
+    await sendPasswordResetEmail(normalizedEmail, resetCode);
+
+    return res.status(200).json({
+      status: "OK",
+      message:
+        "If an account exists for this email, a reset code has been sent.",
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      status: "FAILED",
+      message: "Unable to process password reset request",
+    });
+  }
+};
+// FORGOT PASSWORD
+
+// RESET PASSWORD
+const resetPassword = async (req: Request, res: Response) => {
+  const { email, code, newPassword } = req.body;
+
+  if (!email || !code || !newPassword) {
+    return res.status(400).json({
+      status: "FAILED",
+      message: "Email, verification code, and new password are required",
+    });
+  }
+
+  if (newPassword.length < 8) {
+    return res.status(400).json({
+      status: "FAILED",
+      message: "Password must be at least 8 characters long",
+    });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  try {
+    const result = await pool.query(
+      "SELECT user_uid, password_reset_code, password_reset_code_expires_at FROM users WHERE email = $1",
+      [normalizedEmail],
+    );
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid or expired reset request",
+      });
+    }
+
+    if (!user.password_reset_code || !user.password_reset_code_expires_at) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid or expired reset request",
+      });
+    }
+
+    const resetCodeExpiresAt = new Date(user.password_reset_code_expires_at);
+
+    if (resetCodeExpiresAt.getTime() < Date.now()) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid or expired reset request",
+      });
+    }
+
+    const isCodeValid = await bcrypt.compare(code, user.password_reset_code);
+
+    if (!isCodeValid) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Invalid or expired reset request",
+      });
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
+
+    await pool.query(
+      "UPDATE users SET password_hash = $1, password_reset_code = NULL,password_reset_code_expires_at = NULL WHERE user_uid = $2",
+      [newPasswordHash, user.user_uid],
+    );
+
+    return res.status(200).json({
+      status: "OK",
+      message: "Password reset successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      status: "FAILED",
+      message: "Unable to reset password",
+    });
+  }
+};
+// RESET PASSWORD
+
+export {
+  registerUser,
+  verifyEmail,
+  loginUser,
+  logoutUser,
+  getCurrentUser,
+  forgotPassword,
+  resetPassword,
+};
