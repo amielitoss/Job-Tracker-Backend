@@ -157,6 +157,82 @@ const verifyEmail = async (req: Request, res: Response) => {
 };
 // VERIFY EMAIL
 
+// RESEND VERIFICATION CODE
+const resendVerificationCode = async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({
+      status: "FAILED",
+      message: "Email is required",
+    });
+  }
+  const normalizedEmail = email.trim().toLowerCase();
+
+  try {
+    const result = await pool.query(
+      "SELECT user_uid, email, is_verified, verification_code_expires_at FROM users WHERE email = $1",
+      [normalizedEmail],
+    );
+
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(200).json({
+        status: "OK",
+        message:
+          "If an account exists for this email, a verification code has been sent.",
+      });
+    }
+
+    if (user.is_verified) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Email is already verified",
+      });
+    }
+
+    const currentVerificationExpiry = new Date(
+      user.verification_code_expires_at,
+    );
+
+    if (
+      user.verification_code_expires_at &&
+      currentVerificationExpiry.getTime() > Date.now()
+    ) {
+      return res.status(429).json({
+        status: "FAILED",
+        message: "Please wait until the current verification code expires.",
+      });
+    }
+
+    const verificationCode = randomInt(100000, 1000000).toString();
+    const verificationCodeHash = await bcrypt.hash(verificationCode, 10);
+    const verificationCodeExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await pool.query(
+      "UPDATE users SET verification_code = $1, verification_code_expires_at = $2 WHERE user_uid = $3",
+      [verificationCodeHash, verificationCodeExpiresAt, user.user_uid],
+    );
+
+    await sendVerificationEmail(normalizedEmail, verificationCode);
+
+    return res.status(200).json({
+      status: "OK",
+      message:
+        "If an account exists for this email, a verification code has been sent.",
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      status: "FAILED",
+      message: "Unable to resend verification code",
+    });
+  }
+};
+// RESEND VERIFICATION CODE
+
 // LOGIN A USER
 const loginUser = async (req: Request, res: Response) => {
   const { email, password } = req.body;
@@ -418,4 +494,5 @@ export {
   getCurrentUser,
   forgotPassword,
   resetPassword,
+  resendVerificationCode,
 };
