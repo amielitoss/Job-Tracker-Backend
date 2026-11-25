@@ -16,16 +16,17 @@ const isValidEmail = (email: string) => {
 
 // REGISTER A USER
 const registerUser = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { name, email, password } = req.body;
 
-  if (!email || !password) {
+  if (!name || !email || !password) {
     return res.status(400).json({
       status: "FAILED",
-      message: "Email and password are required",
+      message: "Name, email and password are required",
     });
   }
 
   const normalizedEmail = email.trim().toLowerCase();
+  const normalizedName = name.trim();
 
   if (!isValidEmail(normalizedEmail)) {
     return res.status(400).json({
@@ -47,8 +48,9 @@ const registerUser = async (req: Request, res: Response) => {
     const verificationCodeHash = await bcrypt.hash(verificationCode, 10);
     const verificationCodeExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
     const result = await pool.query(
-      "INSERT INTO users (email, password_hash, verification_code, verification_code_expires_at) VALUES ($1, $2, $3, $4) RETURNING user_uid, email, created_at",
+      "INSERT INTO users (name, email, password_hash, verification_code, verification_code_expires_at) VALUES ($1, $2, $3, $4, $5) RETURNING user_uid, name,email, created_at",
       [
+        normalizedName,
         normalizedEmail,
         passwordHash,
         verificationCodeHash,
@@ -235,7 +237,7 @@ const resendVerificationCode = async (req: Request, res: Response) => {
 
 // LOGIN A USER
 const loginUser = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email, password, rememberMe } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({
@@ -248,7 +250,7 @@ const loginUser = async (req: Request, res: Response) => {
 
   try {
     const result = await pool.query(
-      "SELECT user_uid, email, password_hash, is_verified FROM users WHERE email = $1",
+      "SELECT user_uid, name, email, password_hash, is_verified FROM users WHERE email = $1",
       [normalizedEmail],
     );
 
@@ -275,17 +277,22 @@ const loginUser = async (req: Request, res: Response) => {
       });
     }
 
+    const tokenExpiry = rememberMe ? "14d" : "5h";
+    const cookieMaxAge = rememberMe
+      ? 14 * 24 * 60 * 60 * 1000
+      : 5 * 60 * 60 * 1000;
+
     const token = jwt.sign(
       { userId: user.user_uid },
       process.env.JWT_SECRET as string,
-      { expiresIn: "1h" },
+      { expiresIn: tokenExpiry },
     );
 
     res.cookie("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 1000,
+      maxAge: cookieMaxAge,
     });
 
     return res.status(200).json({
@@ -293,6 +300,7 @@ const loginUser = async (req: Request, res: Response) => {
       message: "Login successful",
       user: {
         user_uid: user.user_uid,
+        name: user.name,
         email: user.email,
       },
     });
@@ -327,7 +335,7 @@ const getCurrentUser = async (req: AuthenticatedRequest, res: Response) => {
 
   try {
     const result = await pool.query(
-      "SELECT user_uid, email, created_at FROM users WHERE user_uid = $1",
+      "SELECT user_uid, name, email, created_at FROM users WHERE user_uid = $1",
       [userId],
     );
     if (result.rows.length === 0) {
