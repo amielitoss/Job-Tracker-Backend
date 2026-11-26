@@ -238,6 +238,7 @@ const resendVerificationCode = async (req: Request, res: Response) => {
 // LOGIN A USER
 const loginUser = async (req: Request, res: Response) => {
   const { email, password, rememberMe } = req.body;
+  const shouldRemember = rememberMe === true;
 
   if (!email || !password) {
     return res.status(400).json({
@@ -277,8 +278,8 @@ const loginUser = async (req: Request, res: Response) => {
       });
     }
 
-    const tokenExpiry = rememberMe ? "14d" : "5h";
-    const cookieMaxAge = rememberMe
+    const tokenExpiry = shouldRemember ? "14d" : "5h";
+    const cookieMaxAge = shouldRemember
       ? 14 * 24 * 60 * 60 * 1000
       : 5 * 60 * 60 * 1000;
 

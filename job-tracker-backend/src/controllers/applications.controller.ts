@@ -169,7 +169,25 @@ const updateApplication = async (
     }
   }
 
-  if (status && !isValidStatus(status)) {
+  if (location !== undefined) {
+    if (isEmptyText(location)) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Location cannot be empty",
+      });
+    }
+  }
+
+  if (date !== undefined) {
+    if (isEmptyText(date)) {
+      return res.status(400).json({
+        status: "FAILED",
+        message: "Date cannot be empty",
+      });
+    }
+  }
+
+  if (status !== undefined && !isValidStatus(status)) {
     return res.status(400).json({
       status: "FAILED",
       message: "Status must be Applied, Interview, Offer, or Rejected",
