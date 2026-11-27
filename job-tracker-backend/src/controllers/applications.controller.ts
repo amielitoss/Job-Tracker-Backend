@@ -9,6 +9,7 @@ import pool from "../config/db.js";
 
 type CreateApplicationBody = Omit<ApplicationType, "id">;
 
+// GET
 const getApplications = async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.userId;
   try {
@@ -24,6 +25,7 @@ const getApplications = async (req: AuthenticatedRequest, res: Response) => {
       .json({ status: "FAILED", message: "Unable to fetch applications" });
   }
 };
+// GET
 
 const isValidStatus = (status: ApplicationStatus) => {
   return applicationStatuses.includes(status);
@@ -39,6 +41,7 @@ const isValidUUID = (id: string) => {
   return uuidRegex.test(id);
 };
 
+// GET by ID
 const getApplicationById = async (
   req: AuthenticatedRequest<{ id: string }>,
   res: Response,
@@ -72,7 +75,9 @@ const getApplicationById = async (
       .json({ status: "FAILED", message: "Unable to fetch application" });
   }
 };
+// GET by ID
 
+// POST
 const createApplication = async (req: AuthenticatedRequest, res: Response) => {
   const {
     company,
@@ -128,7 +133,9 @@ const createApplication = async (req: AuthenticatedRequest, res: Response) => {
       .json({ status: "FAILED", message: "Unable to create application" });
   }
 };
+// POST
 
+// PATCH
 const updateApplication = async (
   req: AuthenticatedRequest<{ id: string }>,
   res: Response,
@@ -224,7 +231,9 @@ const updateApplication = async (
     });
   }
 };
+// PATCH
 
+// DELETE
 const deleteApplication = async (
   req: AuthenticatedRequest<{ id: string }>,
   res: Response,
@@ -260,6 +269,7 @@ const deleteApplication = async (
     });
   }
 };
+// DELETE
 
 export {
   getApplications,
